@@ -1,13 +1,16 @@
 # bwsdk
 This is the open-source library for the Biwin company's product CXL
 
+https://github.com/BiwinDev/bwsdk/wiki
+
 We are proud to introduce an innovative SDK developed for CXL (Compute Express Link) products. CXL, as a storage technology with tremendous potential, delivers outstanding performance and scalability to modern computer systems. Our SDK consists of the following components to meet the diverse needs of users:
 
 Libraries: Our SDK provides a set of powerful libraries that enable developers to easily interact with CXL memory. These libraries include efficient data transfer and storage interfaces, as well as tools for managing and optimizing memory access.
 
 Numactl: The SDK also includes the numactl tool, which allows developers to optimize memory access and task allocation on multi-core systems. By utilizing numactl, developers can better leverage the high bandwidth and low latency features of CXL memory, thereby improving the overall performance of applications.
 
-Kernel: The SDK comes with a kernel module for CXL to ensure good compatibility and stability with the operating system. This kernel module provides low-level support, enabling developers to utilize CXL memory for high-performance computing and large-scale data processing.
+#Kernel#:
+The SDK comes with a kernel module for CXL to ensure good compatibility and stability with the operating system. This kernel module provides low-level support, enabling developers to utilize CXL memory for high-performance computing and large-scale data processing.
 
 System Calls: In order to seamlessly integrate with the operating system, our SDK provides essential system call interfaces, enabling developers to directly access and manage CXL memory. This allows developers to fully leverage the potential of CXL memory and achieve efficient data processing and storage.
 
