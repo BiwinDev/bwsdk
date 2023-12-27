@@ -20,3 +20,5 @@ User Guide: In order to ensure that developers can fully understand and leverage
 Introducing CXL memory through our SDK becomes simpler and more efficient. It reduces the burden on developers when using CXL memory and enhances application performance and reliability through built-in memory optimization strategies. Additionally, our SDK provides memory error detection tools, helping developers identify and address potential memory issues promptly, thereby improving system stability and security.
 
 In high-performance computing, artificial intelligence, big data analytics, and other fields, our CXL SDK provides developers with powerful tools and support, empowering them to achieve outstanding application performance and innovation. By choosing our CXL SDK, you will receive top-notch technical support and excellent performance, unlocking limitless possibilities for your projects. We look forward to partnering with you to jointly shape the future of CXL memory!
+
+![image](https://github.com/BiwinDev/bwsdk/assets/154805231/908428a5-6c6d-40f9-a63d-ba7844216653)
