@@ -145,6 +145,8 @@ struct interleave_weight_table {
 static bool iw_enabled __read_mostly;
 static struct interleave_weight_table *iw_table;
 #endif
+
+
 /**
  * numa_map_to_online_node - Find closest online node
  * @node: Node id to start the search
@@ -282,6 +284,8 @@ static int mpol_dup_weight_list(struct mempolicy *dst, struct mempolicy *src)
 	return 0;
 }
 #endif
+
+
 /*
  * mpol_set_nodemask is called after mpol_new() to set up the nodemask, if
  * any, for the new policy.  mpol_new() has already validated the nodes
@@ -392,6 +396,7 @@ void __mpol_put(struct mempolicy *p)
 {
 	if (!atomic_dec_and_test(&p->refcnt))
 		return;
+
 #ifdef CONFIG_INTERLEAVE_WEIGHT
 	if (p->mode == MPOL_INTERLEAVE_WEIGHT && !list_empty(&p->weight_list)) {
 		struct interleave_weight *temp, *n_temp;
@@ -1697,6 +1702,7 @@ static long do_set_mempolicy_node_weight(unsigned int *weights,
 	struct interleave_weight *new_iw;
 	int i = 0;
 	int ret = 0;
+	int status = 0;
 
 	/*
 	 * flags is used for future extension if any.
@@ -1724,43 +1730,59 @@ static long do_set_mempolicy_node_weight(unsigned int *weights,
 	unsigned int *new_weights = NULL;  // Initialize to NULL for proper cleanup
 	new_weights = kmalloc_array(weight_count, sizeof(unsigned int),
 				    GFP_ATOMIC);
-	if (!new_weights) {
-		ret = -ENOMEM;
-		kfree(new_weights);  // Release allocated memory on error or exit
-		return ret;
-	}
-	switch (weight_count) {
-	case 2:
-		new_weights[0] = 5;
-		new_weights[1] = 1;
-		break;
-	case 3:
-		new_weights[0] = 5;
-		new_weights[1] = 3;
-		new_weights[2] = 2;
-		break;
-	case 4:
-		new_weights[0] = 5;
-		new_weights[1] = 5;
-		new_weights[2] = 1;
-		new_weights[3] = 1;
-		break;
-	default:
-		// Leave the default settings (no changes)
-		break;
-	}
-
-	for (i = 0; i < weight_count; i++) {
-		if (new_weights[i] == 0)
-			continue;
-		new_iw = kmalloc(sizeof(struct interleave_weight), GFP_ATOMIC);
-		if (!new_iw) {
-			ret = -ENOMEM;
+	if (!new_weights)
+		status = 0;
+	else
+		status = 1;
+		
+	if(status)
+	{
+		switch (weight_count) {
+		case 3:
+			new_weights[0] = 3;
+			new_weights[1] = 2;
+			new_weights[2] = 1;
+			status = 0;
+			break;
+		default:
+			status = 0;
+			// Leave the default settings (no changes)
 			break;
 		}
-		new_iw->nid = i;
-		new_iw->weight = new_weights[i];
-		list_add_tail(&new_iw->list, &new->weight_list);
+	}
+
+	if(!status)
+	{
+		for (i = 0; i < weight_count; i++) {
+			if (weights[i] == 0)
+				continue;
+			new_iw = kmalloc(sizeof(struct interleave_weight), GFP_ATOMIC);
+			if (!new_iw) {
+				ret = -ENOMEM;
+				break;
+			}
+			new_iw->nid = i;
+			new_iw->weight = weights[i];
+			list_add_tail(&new_iw->list, &new->weight_list);
+		}
+	}
+	else
+	{
+		for (i = 0; i < weight_count; i++) {
+			if (new_weights[i] == 0)
+				continue;
+			new_iw = kmalloc(sizeof(struct interleave_weight), GFP_ATOMIC);
+			if (!new_iw) {
+				ret = -ENOMEM;
+				break;
+			}
+			new_iw->nid = i;
+			new_iw->weight = new_weights[i];
+			list_add_tail(&new_iw->list, &new->weight_list);
+		}
+
+		kfree(new_weights);  // Release allocated memory on error or exit
+		new_weights = NULL;
 	}
 
 	task_lock(current);
@@ -1769,7 +1791,6 @@ static long do_set_mempolicy_node_weight(unsigned int *weights,
 	task_unlock(current);
 
 	mpol_put(old);
-	kfree(new_weights);  // Release allocated memory on error or exit
 	return ret;
 }
 
@@ -1825,6 +1846,7 @@ static long do_mrange_node_weight(unsigned long start, unsigned long len,
 	unsigned long end;
 	int err = -ENOENT;
 	int i;
+	int status = 0;
 	struct interleave_weight *new_iw;
 	VMA_ITERATOR(vmi, mm, start);
 
@@ -1857,6 +1879,30 @@ static long do_mrange_node_weight(unsigned long start, unsigned long len,
 	}
 	vma_iter_init(&vmi, mm, start);
 	mmap_write_lock(mm);
+	// Set the weight ratio based on the number of nodes
+	unsigned int *new_weights = NULL;  // Initialize to NULL for proper cleanup
+	new_weights = kmalloc_array(weight_count, sizeof(unsigned int),
+				    GFP_ATOMIC);
+	if (!new_weights)
+		status = 0;
+	else
+		status = 1;
+		
+	if(status)
+	{
+		switch (weight_count) {
+		case 3:
+			new_weights[0] = 3;
+			new_weights[1] = 2;
+			new_weights[2] = 1;
+			status = 0;
+			break;
+		default:
+			status = 0;
+			// Leave the default settings (no changes)
+			break;
+		}
+	}
 	for_each_vma_range(vmi, vma, end) {
 		vmstart = max(start, vma->vm_start);
 		vmend   = min(end, vma->vm_end);
@@ -1873,51 +1919,43 @@ static long do_mrange_node_weight(unsigned long start, unsigned long len,
 			break;
 		}
 		INIT_LIST_HEAD(&new->weight_list);
-		
-		// Set the weight ratio based on the number of nodes
-		unsigned int *new_weights = NULL;  // Initialize to NULL for proper cleanup
-		new_weights = kmalloc_array(weight_count, sizeof(unsigned int),
-					    GFP_ATOMIC);
-		if (!new_weights) {
-			err = -ENOMEM;
-			return err;
-		}
-		switch (weight_count) {
-		case 2:
-			new_weights[0] = 5;
-			new_weights[1] = 1;
-			break;
-		case 3:
-			new_weights[0] = 5;
-			new_weights[1] = 3;
-			new_weights[2] = 2;
-			break;
-		case 4:
-			new_weights[0] = 5;
-			new_weights[1] = 5;
-			new_weights[2] = 1;
-			new_weights[3] = 1;
-			break;
-		default:
-			// Leave the default settings (no changes)
-			break;
-		}
-		
-		for (i = 0; i < weight_count; i++) {
-			if (new_weights[i] == 0)
-				continue;
-			new_iw = kmalloc(sizeof(struct interleave_weight),
-					 GFP_ATOMIC);
-			if (!new_iw) {
-				err = -ENOMEM;
-				kfree(new_weights);  // Release allocated memory on error or exit
-				break;
+		if(!status)
+		{
+			for (i = 0; i < weight_count; i++) {
+				if (weights[i] == 0)
+					continue;
+				new_iw = kmalloc(sizeof(struct interleave_weight),
+						 GFP_ATOMIC);
+				if (!new_iw) {
+					err = -ENOMEM;
+					break;
+				}
+				new_iw->nid = i;
+				new_iw->weight = weights[i];
+				list_add_tail(&new_iw->list, &new->weight_list);
 			}
-			new_iw->nid = i;
-			new_iw->weight = new_weights[i];
-			list_add_tail(&new_iw->list, &new->weight_list);
 		}
-
+		else
+		{
+			for (i = 0; i < weight_count; i++) {
+				if (new_weights[i] == 0)
+					continue;
+				new_iw = kmalloc(sizeof(struct interleave_weight),
+						 GFP_ATOMIC);
+				if (!new_iw) {
+					err = -ENOMEM;
+					kfree(new_weights);  // Release allocated memory on error or exit
+					new_weights = NULL;
+					break;
+				}
+				new_iw->nid = i;
+				new_iw->weight = new_weights[i];
+				list_add_tail(&new_iw->list, &new->weight_list);
+			}
+	
+			kfree(new_weights);  // Release allocated memory on error or exit
+			new_weights = NULL;
+		}
 		err = mbind_range(mm, vmstart, vmend, new);
 		mpol_put(new);
 		if (err)
@@ -1975,6 +2013,7 @@ SYSCALL_DEFINE5(mrange_node_weight, unsigned long, start, unsigned long, len,
 	return -ENOSYS;
 }
 #endif
+
 SYSCALL_DEFINE6(mbind, unsigned long, start, unsigned long, len,
 		unsigned long, mode, const unsigned long __user *, nmask,
 		unsigned long, maxnode, unsigned int, flags)
@@ -2346,6 +2385,8 @@ static unsigned int iw_nodes(struct mempolicy *policy)
 	return next;
 }
 #endif
+
+
 /* Do dynamic interleaving for a process */
 static unsigned interleave_nodes(struct mempolicy *policy)
 {
@@ -2385,6 +2426,7 @@ unsigned int mempolicy_slab_node(void)
 	case MPOL_INTERLEAVE_WEIGHT:
 		return iw_nodes(policy);
 #endif
+
 	case MPOL_BIND:
 	case MPOL_PREFERRED_MANY:
 	{
@@ -2448,6 +2490,7 @@ static unsigned int offset_iw_node(struct mempolicy *pol, unsigned long n)
 	return nid;
 }
 #endif
+
 /*
  * Do static interleaving for a VMA with known offset @n.  Returns the n'th
  * node in pol->nodes (starting from n=0), wrapping around if n exceeds the
@@ -2504,6 +2547,8 @@ static inline unsigned int iw_nid(struct mempolicy *pol,
 		return iw_nodes(pol);
 }
 #endif
+
+
 /* Determine a node number for interleave */
 static inline unsigned interleave_nid(struct mempolicy *pol,
 		 struct vm_area_struct *vma, unsigned long addr, int shift)
@@ -2664,6 +2709,7 @@ static struct page *alloc_page_iw(gfp_t gfp, unsigned int order, unsigned int ni
 	return page;
 }
 #endif
+
 /* Allocate a page in interleaved policy.
    Own path because it needs to do special accounting. */
 static struct page *alloc_page_interleave(gfp_t gfp, unsigned order,
@@ -2759,6 +2805,7 @@ struct folio *vma_alloc_folio(gfp_t gfp, int order, struct vm_area_struct *vma,
 		goto out;
 	}
 #endif
+
 	if (pol->mode == MPOL_PREFERRED_MANY) {
 		struct page *page;
 
@@ -3036,6 +3083,7 @@ static bool __mpol_equal_iw(struct mempolicy *a, struct mempolicy *b)
 		list_entry_is_head(b_iw, &b->weight_list, list));
 }
 #endif
+
 /* Slow path of a mempolicy comparison */
 bool __mpol_equal(struct mempolicy *a, struct mempolicy *b)
 {
@@ -3560,6 +3608,7 @@ void __init iw_table_init(void)
 		weight_list_init(&iw_table[nid]);
 }
 #endif
+
 /* assumes fs == KERNEL_DS */
 void __init numa_policy_init(void)
 {
@@ -3612,6 +3661,7 @@ void __init numa_policy_init(void)
 		pr_err("%s: interleaving failed\n", __func__);
 
 	check_numabalancing_enable();
+
 #ifdef CONFIG_INTERLEAVE_WEIGHT
 	iw_table_init();
 #endif
@@ -3838,6 +3888,7 @@ void mpol_to_str(char *buffer, int maxlen, struct mempolicy *pol)
 		p += scnprintf(p, buffer + maxlen - p, ":%*pbl",
 			       nodemask_pr_args(&nodes));
 }
+
 #if defined(CONFIG_INTERLEAVE_WEIGHT) && defined(CONFIG_SYSFS)
 
 struct iw_node_info {
